@@ -1,16 +1,16 @@
 SHELL = /usr/bin/env bash -xeuo pipefail
 
-stack_name:=github-pr-notification
+STACK_NAME:=github-pr-notification
 
 ipython:
 	PYTHONPATH=src \
 	poetry run ipython
 
 isort:
-	poetry run isort src
+	poetry run isort src scripts
 
 black:
-	poetry run black src
+	poetry run black src scripts
 
 format: isort black
 
@@ -26,7 +26,7 @@ sam-validate:
 package:
 	sam package \
 		--s3-bucket ${ARTIFACT_BUCKET} \
-		--s3-prefix library-base \
+		--s3-prefix ${STACK_NAME} \
 		--template-file sam.yml \
 		--output-template-file template.yml
 
@@ -41,3 +41,6 @@ describe:
 	aws cloudformation describe-stacks \
 		--stack-name ${STACK_NAME} \
 		--query Stacks[0].Outputs
+
+set-parameters:
+	poetry run python scripts/create_ssm_parameters.py

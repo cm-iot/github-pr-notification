@@ -23,7 +23,6 @@ class EnvironmentVariables:
 @dataclass(frozen=True)
 class Parameters:
     github_token: str
-    target_id: str
     webhook_url: str
 
 
@@ -43,7 +42,7 @@ def main(
     env = load_environ()
     params = get_parameters(ssm_client)
     repositories = get_repository_names(env.dynamodb_table, dynamodb_client)
-    targets = get_notification_target(repositories, params.target_id, params.target_id)
+    targets = get_notification_target(repositories, params.github_token)
     body = create_body(targets)
     if body is None:
         return
@@ -59,16 +58,15 @@ def load_environ() -> EnvironmentVariables:
 
 @logger.logging_function()
 def get_parameters(ssm_client: SSMClient) -> Parameters:
-    option = {"Path": "GithubPrNotification/", "WithDecryption": True}
+    option = {"Path": "/GithubPrNotification/", "WithDecryption": True}
     logger.add_functional_data("option", option)
     resp = ssm_client.get_parameters_by_path(**option)
     logger.add_functional_data("response", resp)
 
     params = {x["Name"]: x["Value"] for x in resp["Parameters"]}
     return Parameters(
-        github_token=params["GithubPrNotification/GithubToken"],
-        target_id=params["GithubPrNotification/TargetId"],
-        webhook_url=params["GithubPrNotification/WebhookUrl"],
+        github_token=params["/GithubPrNotification/GithubToken"],
+        webhook_url=params["/GithubPrNotification/WebhookUrl"],
     )
 
 
@@ -105,9 +103,10 @@ def is_reviewer(pull: PullRequest, target_id: str) -> bool:
 
 @logger.logging_function()
 def get_notification_target(
-    repositories: List[str], target_id: str, github_token: str
+    repositories: List[str], github_token: str
 ) -> Dict[Repository, List[PullRequest]]:
     g = Github(github_token)
+    target_id = g.get_user().login
     result = {}
     for name in repositories:
         repo = g.get_repo(name)
