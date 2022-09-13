@@ -29,9 +29,9 @@ $ make build package deploy
 $ make set-parameters
 ```
 
-実行して、TokenやUrlを入力する。
-GitHubのPersonal access tokenはrepoの権限さえあれば十分です。
-(必要な権限の絞り込みはできてません)
+実行して、TokenやUrlを入力する。  
+GitHubのPersonal access tokenはrepoの権限さえあれば十分です。  
+(必要な権限の絞り込みはできてません)  
 ![9005536208251169  スクリーンショット 2022-09-13 14 21 05](https://user-images.githubusercontent.com/13509891/189815629-fb0afa28-0461-4cd4-91c7-3419c3d6e67e.png)
 
 ### 4. 対象とするリポジトリを登録する
