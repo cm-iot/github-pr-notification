@@ -131,3 +131,7 @@ dmypy.json
 # custom
 .idea/
 /layer/
+uuid.txt
+/repositories.json
+template.yml
+*.zip
