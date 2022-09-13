@@ -76,6 +76,7 @@ python-versions = ">=3.7"
 
 [package.dependencies]
 botocore-stubs = "*"
+mypy-boto3-cloudformation = {version = ">=1.24.0,<1.25.0", optional = true, markers = "extra == \"cloudformation\""}
 mypy-boto3-dynamodb = {version = ">=1.24.0,<1.25.0", optional = true, markers = "extra == \"dynamodb\""}
 mypy-boto3-ssm = {version = ">=1.24.0,<1.25.0", optional = true, markers = "extra == \"ssm\""}
 types-s3transfer = "*"
@@ -593,6 +594,17 @@ python-versions = ">=3.5"
 traitlets = "*"
 
 [[package]]
+name = "mypy-boto3-cloudformation"
+version = "1.24.36.post1"
+description = "Type annotations for boto3.CloudFormation 1.24.36 service generated with mypy-boto3-builder 7.10.0"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+typing-extensions = ">=4.1.0"
+
+[[package]]
 name = "mypy-boto3-dynamodb"
 version = "1.24.36.post1"
 description = "Type annotations for boto3.DynamoDB 1.24.36 service generated with mypy-boto3-builder 7.10.0"
@@ -907,7 +919,7 @@ python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "50fe1230e35ef2db8fad6aa133d11626f91603b5458c1f7a1c42f357f3eeaa3a"
+content-hash = "eca94041c2e2898e5472f9a083b4e29d88debbdc1942877526c19f8c24337977"
 
 [metadata.files]
 appnope = [
@@ -962,6 +974,7 @@ matplotlib-inline = [
     {file = "matplotlib-inline-0.1.3.tar.gz", hash = "sha256:a04bfba22e0d1395479f866853ec1ee28eea1485c1d69a6faf00dc3e24ff34ee"},
     {file = "matplotlib_inline-0.1.3-py3-none-any.whl", hash = "sha256:aed605ba3b72462d64d475a21a9296f400a19c4f74a31b59103d2a99ffd5aa5c"},
 ]
+mypy-boto3-cloudformation = []
 mypy-boto3-dynamodb = []
 mypy-boto3-ssm = []
 mypy-extensions = [

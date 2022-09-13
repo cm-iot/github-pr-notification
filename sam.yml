@@ -27,6 +27,7 @@ Resources:
       MemorySize: 256
       Policies:
         - arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
         - Version: 2012-10-17
           Statement:
             - Effect: Allow
@@ -36,3 +37,13 @@ Resources:
                 - "*"
       Runtime: python3.9
       Timeout: 900
+      Events:
+        Schedule:
+          Type: Schedule
+          Properties:
+            Enabled: true
+            Schedule: 'rate(30 minutes)'
+
+Outputs:
+  TableName:
+    Value: !Ref TableRepositories

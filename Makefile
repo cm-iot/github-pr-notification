@@ -24,6 +24,7 @@ sam-validate:
 	sam validate -t sam.yml
 
 package:
+	uuidgen > src/uuid.txt
 	sam package \
 		--s3-bucket ${ARTIFACT_BUCKET} \
 		--s3-prefix ${STACK_NAME} \
@@ -44,3 +45,9 @@ describe:
 
 set-parameters:
 	poetry run python scripts/create_ssm_parameters.py
+
+get-monitoring-repositories:
+	poetry run python scripts/get_repositories.py ${STACK_NAME}
+
+put-monitoring-repositories:
+	poetry run python scripts/put_repositories.py ${STACK_NAME}

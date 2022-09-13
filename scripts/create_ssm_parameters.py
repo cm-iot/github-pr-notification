@@ -29,7 +29,7 @@ def main():
         is_secure=False,
         ssm=ssm,
     )
-    print('finish: set parameters ')
+    print("finish: set parameters ")
 
 
 def input_values() -> Parameters:

@@ -1,7 +1,8 @@
 import json
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, Tuple
 from urllib.request import Request, urlopen
 
 import boto3
@@ -13,6 +14,8 @@ from mypy_boto3_dynamodb.service_resource import Table
 from mypy_boto3_ssm import SSMClient
 
 from logger import MyLogger
+
+jst = timezone(offset=timedelta(hours=+9), name="JST")
 
 
 @dataclass(frozen=True)
@@ -42,8 +45,8 @@ def main(
     env = load_environ()
     params = get_parameters(ssm_client)
     repositories = get_repository_names(env.dynamodb_table, dynamodb_client)
-    targets = get_notification_target(repositories, params.github_token)
-    body = create_body(targets)
+    targets, target_id = get_notification_target(repositories, params.github_token)
+    body = create_body(targets, target_id)
     if body is None:
         return
     post_to_slack(body, params.webhook_url)
@@ -102,27 +105,49 @@ def is_reviewer(pull: PullRequest, target_id: str) -> bool:
 
 
 @logger.logging_function()
+def is_opener(pull: PullRequest, target_id: str) -> bool:
+    return pull.user.login == target_id
+
+
+@logger.logging_function()
 def get_notification_target(
     repositories: List[str], github_token: str
-) -> Dict[Repository, List[PullRequest]]:
+) -> Tuple[Dict[Repository, List[PullRequest]], str]:
     g = Github(github_token)
     target_id = g.get_user().login
     result = {}
     for name in repositories:
         repo = g.get_repo(name)
-        pulls = [x for x in repo.get_pulls(state="open") if is_reviewer(x, target_id)]
+        pulls = [
+            x
+            for x in repo.get_pulls(state="open")
+            if is_reviewer(x, target_id) or is_opener(x, target_id)
+        ]
         if len(pulls) == 0:
             continue
         result[repo] = pulls
 
-    return result
+    return result, target_id
 
 
 @logger.logging_function()
-def create_body(targets: Dict[Repository, List[PullRequest]]) -> Optional[dict]:
+def create_text(pr: PullRequest, target_id: str) -> str:
+    pr_type = "opener" if is_opener(pr, target_id) else "reviewer"
+    return f"`{pr_type}` <{pr.html_url}|#{pr.number} {pr.title}> ({pr.created_at} UTC)"
+
+
+@logger.logging_function()
+def create_body(
+    targets: Dict[Repository, List[PullRequest]], target_id: str
+) -> Optional[dict]:
     if len(targets) == 0:
         return None
-    blocks = [{"type": "section", "text": {"type": "markdwn", "text": "<!here>"}}]
+    blocks = [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"<!here> ({datetime.now(jst)})"},
+        }
+    ]
     for repo, pulls in targets.items():
         if len(pulls) == 0:
             continue
@@ -137,8 +162,8 @@ def create_body(targets: Dict[Repository, List[PullRequest]]) -> Optional[dict]:
             {
                 "type": "section",
                 "text": {
-                    "type": "markdwn",
-                    "text": f"<{pr.html_url}|`#{pr.number}` {pr.title}> ({pr.created_at} UTC)",
+                    "type": "mrkdwn",
+                    "text": create_text(pr, target_id),
                 },
             }
             for pr in pulls
@@ -151,6 +176,7 @@ def create_body(targets: Dict[Repository, List[PullRequest]]) -> Optional[dict]:
 def post_to_slack(body: dict, webhook_url: str):
     req = Request(
         webhook_url,
+        method="POST",
         headers={"Content-Type": "application/json"},
         data=json.dumps(body).encode("utf-8"),
     )
