@@ -29,7 +29,27 @@ class Parameters:
     webhook_url: str
 
 
-logger = MyLogger("__name__")
+@dataclass(frozen=True)
+class OutputRepositoryInfo:
+    full_name: str
+
+
+@dataclass(frozen=True)
+class OutputPullRequestInfo:
+    is_opener: bool
+    number: int
+    url: str
+    title: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class Target:
+    repository: OutputRepositoryInfo
+    pull_requests: List[OutputPullRequestInfo]
+
+
+logger = MyLogger(__name__)
 
 
 @logger.logging_handler()
@@ -45,10 +65,13 @@ def main(
     env = load_environ()
     params = get_parameters(ssm_client)
     repositories = get_repository_names(env.dynamodb_table, dynamodb_client)
-    targets, target_id = get_notification_target(repositories, params.github_token)
-    body = create_body(targets, target_id)
-    if body is None:
+
+    targets = get_targets(repositories, params.github_token)
+
+    if len(targets) == 0:
         return
+
+    body = create_body_v2(targets)
     post_to_slack(body, params.webhook_url)
 
 
@@ -96,83 +119,6 @@ def get_repository_names(
 
 
 @logger.logging_function()
-def is_reviewer(pull: PullRequest, target_id: str) -> bool:
-    for x in pull.get_review_requests():
-        for user in x:
-            if user.login == target_id:
-                return True
-    return False
-
-
-@logger.logging_function()
-def is_opener(pull: PullRequest, target_id: str) -> bool:
-    return pull.user.login == target_id
-
-
-@logger.logging_function()
-def get_notification_target(
-    repositories: List[str], github_token: str
-) -> Tuple[Dict[Repository, List[PullRequest]], str]:
-    g = Github(github_token)
-    target_id = g.get_user().login
-    result = {}
-    for name in repositories:
-        repo = g.get_repo(name)
-        pulls = [
-            x
-            for x in repo.get_pulls(state="open")
-            if is_reviewer(x, target_id) or is_opener(x, target_id)
-        ]
-        if len(pulls) == 0:
-            continue
-        result[repo] = pulls
-
-    return result, target_id
-
-
-@logger.logging_function()
-def create_text(pr: PullRequest, target_id: str) -> str:
-    pr_type = "opener" if is_opener(pr, target_id) else "reviewer"
-    return f"`{pr_type}` <{pr.html_url}|#{pr.number} {pr.title}> ({pr.created_at} UTC)"
-
-
-@logger.logging_function()
-def create_body(
-    targets: Dict[Repository, List[PullRequest]], target_id: str
-) -> Optional[dict]:
-    if len(targets) == 0:
-        return None
-    blocks = [
-        {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"<!here> ({datetime.now(jst)})"},
-        }
-    ]
-    for repo, pulls in targets.items():
-        if len(pulls) == 0:
-            continue
-        blocks += [
-            {"type": "divider"},
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": repo.full_name, "emoji": False},
-            },
-        ]
-        blocks += [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": create_text(pr, target_id),
-                },
-            }
-            for pr in pulls
-        ]
-
-    return {"blocks": blocks}
-
-
-@logger.logging_function()
 def post_to_slack(body: dict, webhook_url: str):
     req = Request(
         webhook_url,
@@ -181,3 +127,93 @@ def post_to_slack(body: dict, webhook_url: str):
         data=json.dumps(body).encode("utf-8"),
     )
     urlopen(req)
+
+
+@logger.logging_function()
+def is_pull_request_target(pull_request: PullRequest, user_id: str) -> bool:
+    if pull_request.draft:
+        return False
+    if pull_request.user.login == user_id:
+        return True
+    for x in pull_request.get_review_requests():
+        for reviewer in x:
+            if reviewer.login == user_id:
+                return True
+    return False
+
+
+@logger.logging_function()
+def get_output_pull_request_info(
+    pr: PullRequest, user_id: str
+) -> OutputPullRequestInfo:
+    return OutputPullRequestInfo(
+        is_opener=pr.user.login == user_id,
+        number=pr.number,
+        url=pr.html_url,
+        title=pr.title,
+        created_at=str(pr.created_at),
+    )
+
+
+@logger.logging_function()
+def get_targets(names_repository: List[str], github_token: str) -> List[Target]:
+    g = Github(github_token)
+    user_id = g.get_user().login
+    result = []
+    for name_repository in names_repository:
+        try:
+            repository = g.get_repo(name_repository)
+            pulls = [
+                get_output_pull_request_info(x)
+                for x in repository.get_pulls(state="open")
+                if is_pull_request_target(x, user_id)
+            ]
+            if len(pulls) > 0:
+                result.append(
+                    Target(
+                        repository=OutputRepositoryInfo(full_name=repository.full_name),
+                        pull_requests=pulls,
+                    )
+                )
+        except Exception as e:
+            logger.warning(f"error occurred: {e}")
+    return result
+
+
+@logger.logging_function()
+def create_body_v2(targets: List[Target]) -> dict:
+    blocks = [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"<!here> ({datetime.now(jst)})"},
+        }
+    ]
+    for target in targets:
+        blocks += [
+            {"type": "divider"},
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": target.repository.full_name,
+                    "emoji": False,
+                },
+            },
+        ]
+        blocks += [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "`{0}` <{1}|#{2} {3}> ({4} UTC)".format(
+                        "opener" if pr.is_opener else "reviewer",
+                        pr.url,
+                        pr.number,
+                        pr.title,
+                        pr.created_at,
+                    ),
+                },
+            }
+            for pr in target.pull_requests
+        ]
+    return {"blocks": blocks}
