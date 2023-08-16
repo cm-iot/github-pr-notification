@@ -164,7 +164,7 @@ def get_targets(names_repository: List[str], github_token: str) -> List[Target]:
         try:
             repository = g.get_repo(name_repository)
             pulls = [
-                get_output_pull_request_info(x)
+                get_output_pull_request_info(x, user_id)
                 for x in repository.get_pulls(state="open")
                 if is_pull_request_target(x, user_id)
             ]
